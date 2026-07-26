@@ -381,7 +381,7 @@ export default function GenFormFull() {
 
 
       {/* --- HERO SECTION --- */}
-      <section className="relative z-10 pt-44 pb-20 px-6 max-w-7xl mx-auto text-center bottom-[80px]">
+      <section className="relative z-10 pt-44  px-6 max-w-7xl mx-auto text-center bottom-[80px]">
         {/* --- DYNAMIC GRADIENT ANIMATION BEHIND TEXT --- */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-[400px] pointer-events-none -z-10">
           <motion.div
