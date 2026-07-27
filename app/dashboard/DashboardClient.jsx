@@ -6,8 +6,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Sparkles,
   ArrowRight,
-  ShieldCheck,
-  Zap,
   LayoutDashboard,
   Settings,
   LogOut,
@@ -18,10 +16,11 @@ import {
   Wand2,
   CheckCircle2,
   AlertCircle,
-  FileJson,
   Calendar,
+  Copy,
+  Check,
+  ExternalLink,
 } from "lucide-react";
-import { virgil } from "../../public/fonts/virgil";
 
 const AURA_GRADIENT =
   "bg-clip-text text-transparent bg-gradient-to-r from-[#8A2BE2] via-[#3b82f6] to-[#8A2BE2] animate-gradient-text bg-[length:200%_auto]";
@@ -34,10 +33,10 @@ const NAV_ITEMS = [
 ];
 
 const LOADING_STEPS = [
-  "Reading your prompt…",
-  "Mapping fields…",
-  "Structuring conditional logic…",
-  "Finalizing schema…",
+  "Reading your prompt",
+  "Mapping fields",
+  "Structuring conditional logic",
+  "Finalizing schema",
 ];
 
 function formatCreatedDate(dateString) {
@@ -62,6 +61,7 @@ export default function DashboardClient({ user }) {
   const [isPromptFocused, setIsPromptFocused] = useState(false);
   const [result, setResult] = useState(null);
   const [loadingStep, setLoadingStep] = useState(0);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     async function fetchUserForms() {
@@ -146,17 +146,29 @@ export default function DashboardClient({ user }) {
 
       setResult({ ok: true, data: saveData.form, prompt: promptSnapshot });
       setQuickPrompt("");
-
-      router.push(`/forms/${saveData.form.id}`);
+      setForms((prev) => [saveData.form, ...prev]);
     } catch (e) {
       console.error("Failed to generate form", e);
-      setResult({ ok: false, error: "Network error — could not reach the server", prompt: promptSnapshot });
+      setResult({ ok: false, error: "Network error - could not reach the server", prompt: promptSnapshot });
+    } finally {
       setGenerating(false);
     }
   }
 
   function goToResponses(formId) {
-    router.push(`/forms/${formId}/responses`);
+    router.push("/forms/" + formId + "/responses");
+  }
+
+  function handleCopyLink(formId) {
+    const url = window.location.origin + "/forms/" + formId;
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  function getShareUrl(formId) {
+    if (typeof window === "undefined") return "";
+    return window.location.origin + "/forms/" + formId;
   }
 
   const displayName = user?.name || user?.email?.split("@")[0] || "User";
@@ -164,16 +176,14 @@ export default function DashboardClient({ user }) {
 
   return (
     <div className="h-screen w-screen overflow-hidden grid lg:grid-cols-[280px_1fr] bg-white text-[#1d1d1f] relative">
-      {/* Background Grid Pattern */}
       <div
         className="absolute inset-0 z-0 opacity-[0.02] pointer-events-none"
         style={{
-          backgroundImage: `linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)`,
+          backgroundImage: "linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)",
           backgroundSize: "40px 40px",
         }}
       />
 
-      {/* --- SIDEBAR NAVIGATION --- */}
       <div className="relative z-20 border-r border-gray-100 bg-gray-50/50 p-6 flex-col justify-between hidden lg:flex">
         <div>
           <div className="flex items-center gap-3 cursor-pointer group mb-10" onClick={() => router.push("/")}>
@@ -188,9 +198,10 @@ export default function DashboardClient({ user }) {
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`relative w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-colors cursor-pointer ${
-                    isActive ? "text-white" : "text-gray-500 hover:text-black hover:bg-gray-100/60"
-                  }`}
+                  className={
+                    "relative w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-colors cursor-pointer " +
+                    (isActive ? "text-white" : "text-gray-500 hover:text-black hover:bg-gray-100/60")
+                  }
                 >
                   {isActive && (
                     <motion.div
@@ -209,7 +220,6 @@ export default function DashboardClient({ user }) {
           </div>
         </div>
 
-        {/* User Profile Card */}
         <div className="pt-6 border-t border-gray-200/60 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-violet-100 border border-violet-200 overflow-hidden flex-shrink-0">
@@ -234,7 +244,6 @@ export default function DashboardClient({ user }) {
         </div>
       </div>
 
-      {/* --- MAIN DASHBOARD CONTENT --- */}
       <div className="relative z-10 flex flex-col h-full overflow-y-auto">
         <header className="h-20 border-b border-gray-100 px-8 flex items-center justify-between bg-white/80 backdrop-blur-md sticky top-0 z-30">
           <div />
@@ -256,16 +265,17 @@ export default function DashboardClient({ user }) {
               transition={{ duration: 0.2 }}
               className="p-8 space-y-6 max-w-7xl mx-auto w-full"
             >
-              {/* --- SINGLE PROMPT BOX --- */}
               <div
-                className={`relative rounded-[2rem] border transition-all duration-300 overflow-hidden ${
-                  isPromptFocused ? "border-violet-300 shadow-xl shadow-violet-500/10" : "border-gray-100 shadow-sm"
-                }`}
+                className={
+                  "relative rounded-[2rem] border transition-all duration-300 overflow-hidden " +
+                  (isPromptFocused ? "border-violet-300 shadow-xl shadow-violet-500/10" : "border-gray-100 shadow-sm")
+                }
               >
                 <div
-                  className={`absolute inset-0 bg-gradient-to-br from-violet-50 via-white to-blue-50 transition-opacity duration-500 ${
-                    isPromptFocused ? "opacity-100" : "opacity-0"
-                  }`}
+                  className={
+                    "absolute inset-0 bg-gradient-to-br from-violet-50 via-white to-blue-50 transition-opacity duration-500 " +
+                    (isPromptFocused ? "opacity-100" : "opacity-0")
+                  }
                 />
 
                 <div className="relative p-8">
@@ -288,14 +298,14 @@ export default function DashboardClient({ user }) {
                       }
                     }}
                     disabled={generating}
-                    placeholder="Describe your form in plain language — e.g. 'Customer feedback survey with a 5-star rating and a conditional text box if rating is under 3'"
+                    placeholder="Describe your form in plain language, e.g. Customer feedback survey with a 5-star rating and a conditional text box if rating is under 3"
                     className="w-full bg-transparent text-lg sm:text-xl font-medium text-gray-900 placeholder:text-gray-400 outline-none resize-none leading-snug disabled:opacity-50"
                   />
 
                   <div className="flex items-center justify-between mt-6 pt-5 border-t border-gray-100">
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
                       <Wand2 size={12} />
-                      {generating ? "Building your form…" : "⌘ + Enter to deploy"}
+                      {generating ? "Building your form" : "Cmd + Enter to deploy"}
                     </span>
 
                     <motion.button
@@ -317,7 +327,6 @@ export default function DashboardClient({ user }) {
                 </div>
               </div>
 
-              {/* --- OUTPUT / LOADING / RESULT PANEL --- */}
               <AnimatePresence mode="wait">
                 {generating && (
                   <motion.div
@@ -357,9 +366,10 @@ export default function DashboardClient({ user }) {
                           {LOADING_STEPS.map((_, i) => (
                             <div
                               key={i}
-                              className={`h-1 rounded-full transition-all duration-300 ${
-                                i <= loadingStep ? "bg-violet-500 w-8" : "bg-gray-200 w-4"
-                              }`}
+                              className={
+                                "h-1 rounded-full transition-all duration-300 " +
+                                (i <= loadingStep ? "bg-violet-500 w-8" : "bg-gray-200 w-4")
+                              }
                             />
                           ))}
                         </div>
@@ -368,7 +378,7 @@ export default function DashboardClient({ user }) {
                   </motion.div>
                 )}
 
-                {!generating && result?.ok && (
+                {!generating && result && result.ok && (
                   <motion.div
                     key="success"
                     initial={{ opacity: 0, y: 10 }}
@@ -380,22 +390,61 @@ export default function DashboardClient({ user }) {
                       <CheckCircle2 size={18} className="text-emerald-600 flex-shrink-0 mt-0.5" />
                       <div>
                         <p className="text-xs font-black uppercase tracking-widest text-emerald-700">
-                          Form generated
+                          Form generated, ready to share
                         </p>
-                        <p className="text-[11px] text-emerald-700/70 font-medium mt-1">"{result.prompt}"</p>
+                        <p className="text-[11px] text-emerald-700/70 font-medium mt-1">
+                          {result.prompt}
+                        </p>
                       </div>
                     </div>
 
-                    <div className="p-6">
-                      <div className="flex items-center gap-2 mb-3">
-                        <FileJson size={13} className="text-gray-400" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                          Response
-                        </span>
+                    <div className="p-6 space-y-4">
+                      <div>
+                        <p className="text-xs font-black text-gray-800 uppercase tracking-tight mb-1">
+                          {result.data.title}
+                        </p>
+                        {result.data.description && (
+                          <p className="text-[11px] text-gray-500 font-medium">{result.data.description}</p>
+                        )}
                       </div>
-                      <pre className="bg-white border border-gray-100 rounded-2xl p-4 text-[11px] font-mono text-gray-700 overflow-x-auto whitespace-pre-wrap break-words max-h-64">
-                        {JSON.stringify(result.data, null, 2)}
-                      </pre>
+
+                      <div className="bg-white border border-emerald-200/60 rounded-2xl p-4 flex items-center justify-between gap-4 flex-wrap">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+                          <p className="text-xs font-mono text-gray-600 truncate">
+                            {getShareUrl(result.data.id)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button
+                            onClick={() => handleCopyLink(result.data.id)}
+                            className="flex items-center gap-1.5 px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-full text-[10px] font-black uppercase tracking-widest text-gray-700 hover:border-violet-300 transition cursor-pointer"
+                          >
+                            {copied ? (
+                              <Check size={12} className="text-emerald-600" />
+                            ) : (
+                              <Copy size={12} />
+                            )}
+                            {copied ? "Copied" : "Copy Link"}
+                          </button>
+                          <a
+                            href={"/forms/" + result.data.id}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 px-3.5 py-2 bg-black text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-gray-800 transition cursor-pointer"
+                          >
+                            <ExternalLink size={12} />
+                            <span>Open Form</span>
+                          </a>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => goToResponses(result.data.id)}
+                        className="text-[10px] font-bold text-gray-400 hover:text-black uppercase tracking-widest transition cursor-pointer"
+                      >
+                        View responses and manage form
+                      </button>
                     </div>
                   </motion.div>
                 )}
@@ -419,7 +468,6 @@ export default function DashboardClient({ user }) {
                 )}
               </AnimatePresence>
 
-              {/* Recent forms preview on overview */}
               {forms.length > 0 && (
                 <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
                   <div className="flex justify-between items-center mb-6">
@@ -461,11 +509,12 @@ export default function DashboardClient({ user }) {
                           </div>
                           <div className="flex items-center gap-6">
                             <span
-                              className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${
-                                form.status === "active"
+                              className={
+                                "text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border " +
+                                (form.status === "active"
                                   ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                                  : "bg-gray-100 text-gray-500 border-gray-200"
-                              }`}
+                                  : "bg-gray-100 text-gray-500 border-gray-200")
+                              }
                             >
                               {form.status === "active" ? "Active" : "Inactive"}
                             </span>
@@ -493,7 +542,7 @@ export default function DashboardClient({ user }) {
                 <h3 className="text-lg font-black tracking-tight uppercase italic mb-6">All Forms</h3>
                 {loadingForms ? (
                   <div className="py-12 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">
-                    Loading deployment records...
+                    Loading deployment records
                   </div>
                 ) : forms.length === 0 ? (
                   <div className="py-12 text-center bg-gray-50 rounded-2xl border border-gray-100">
@@ -534,11 +583,12 @@ export default function DashboardClient({ user }) {
                           </div>
                           <div className="flex items-center gap-6">
                             <span
-                              className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${
-                                form.status === "active"
+                              className={
+                                "text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border " +
+                                (form.status === "active"
                                   ? "bg-emerald-50 text-emerald-600 border-emerald-100"
-                                  : "bg-gray-100 text-gray-500 border-gray-200"
-                              }`}
+                                  : "bg-gray-100 text-gray-500 border-gray-200")
+                              }
                             >
                               {form.status === "active" ? "Active" : "Inactive"}
                             </span>
