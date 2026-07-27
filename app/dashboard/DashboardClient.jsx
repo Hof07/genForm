@@ -23,7 +23,34 @@ import {
   Lightbulb,
   TrendingUp,
   RefreshCw,
+  Hash,
+  Smile,
 } from "lucide-react";
+import { Line, Bar, Doughnut } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Tooltip,
+  Legend,
+  Filler,
+} from "chart.js";
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 const AURA_GRADIENT =
   "bg-clip-text text-transparent bg-gradient-to-r from-[#8A2BE2] via-[#3b82f6] to-[#8A2BE2] animate-gradient-text bg-[length:200%_auto]";
@@ -42,6 +69,14 @@ const LOADING_STEPS = [
   "Finalizing schema",
 ];
 
+const CHART_COLORS = ["#8A2BE2", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899"];
+
+const CHART_FONT = {
+  family: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+  size: 10,
+  weight: "700",
+};
+
 function formatCreatedDate(dateString) {
   if (!dateString) return null;
   const date = new Date(dateString);
@@ -51,6 +86,12 @@ function formatCreatedDate(dateString) {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function formatDayLabel(isoDate) {
+  const d = new Date(isoDate + "T00:00:00");
+  if (isNaN(d.getTime())) return isoDate;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 export default function DashboardClient({ user }) {
@@ -216,6 +257,135 @@ export default function DashboardClient({ user }) {
 
   const displayName = user?.name || user?.email?.split("@")[0] || "User";
   const avatarUrl = user?.avatarUrl || "/icon/pile_1.webp";
+
+  // ---- Chart data builders ----
+
+  function buildTimelineChartData(timeline) {
+    return {
+      labels: timeline.labels.map(formatDayLabel),
+      datasets: [
+        {
+          label: "Responses",
+          data: timeline.data,
+          borderColor: "#8A2BE2",
+          backgroundColor: "rgba(138, 43, 226, 0.08)",
+          pointBackgroundColor: "#8A2BE2",
+          pointBorderColor: "#fff",
+          pointBorderWidth: 1.5,
+          pointRadius: 3,
+          tension: 0.35,
+          fill: true,
+        },
+      ],
+    };
+  }
+
+  const timelineOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: "#111",
+        titleFont: CHART_FONT,
+        bodyFont: CHART_FONT,
+        padding: 10,
+        cornerRadius: 10,
+      },
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        border: { display: false },
+        ticks: { font: CHART_FONT, color: "#9ca3af" },
+      },
+      y: {
+        beginAtZero: true,
+        grid: { color: "#f3f4f6" },
+        border: { display: false },
+        ticks: { font: CHART_FONT, color: "#9ca3af", precision: 0 },
+      },
+    },
+  };
+
+  function buildFieldBarData(field) {
+    return {
+      labels: field.labels,
+      datasets: [
+        {
+          label: field.label,
+          data: field.data,
+          backgroundColor: field.labels.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]),
+          borderRadius: 8,
+          maxBarThickness: 36,
+        },
+      ],
+    };
+  }
+
+  const fieldBarOptions = {
+    indexAxis: "y",
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: "#111",
+        titleFont: CHART_FONT,
+        bodyFont: CHART_FONT,
+        padding: 10,
+        cornerRadius: 10,
+      },
+    },
+    scales: {
+      x: {
+        beginAtZero: true,
+        grid: { color: "#f3f4f6" },
+        border: { display: false },
+        ticks: { font: CHART_FONT, color: "#9ca3af", precision: 0 },
+      },
+      y: {
+        grid: { display: false },
+        border: { display: false },
+        ticks: { font: CHART_FONT, color: "#374151" },
+      },
+    },
+  };
+
+  function buildSentimentData(sentiment) {
+    return {
+      labels: ["Positive", "Neutral", "Negative"],
+      datasets: [
+        {
+          data: [sentiment.positive || 0, sentiment.neutral || 0, sentiment.negative || 0],
+          backgroundColor: ["#10b981", "#9ca3af", "#ef4444"],
+          borderWidth: 0,
+        },
+      ],
+    };
+  }
+
+  const sentimentOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: "70%",
+    plugins: {
+      legend: {
+        position: "bottom",
+        labels: { font: CHART_FONT, color: "#374151", boxWidth: 10, padding: 14 },
+      },
+      tooltip: {
+        backgroundColor: "#111",
+        titleFont: CHART_FONT,
+        bodyFont: CHART_FONT,
+        padding: 10,
+        cornerRadius: 10,
+        callbacks: {
+          label: (ctx) => `${ctx.label}: ${ctx.parsed}%`,
+        },
+      },
+    },
+  };
 
   return (
     <div className="h-screen w-screen overflow-hidden grid lg:grid-cols-[280px_1fr] bg-white text-[#1d1d1f] relative">
@@ -775,64 +945,148 @@ export default function DashboardClient({ user }) {
                       </div>
                     )}
 
-                  {!loadingInsights && !insightsError && insightsCache[selectedFormId]?.hasData && (
-                    <div className="space-y-6">
-                      <div className="bg-gradient-to-br from-violet-50 via-white to-blue-50 border border-violet-100 rounded-[2.5rem] p-8">
-                        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white text-violet-600 text-[10px] font-black uppercase tracking-[0.2em] mb-4 border border-violet-100">
-                          <Sparkles size={11} /> Summary
-                        </span>
-                        <p className="text-sm font-medium text-gray-700 leading-relaxed">
-                          {insightsCache[selectedFormId].insights.summary}
-                        </p>
-                      </div>
+                  {!loadingInsights && !insightsError && insightsCache[selectedFormId]?.hasData && (() => {
+                    const cached = insightsCache[selectedFormId];
+                    const { timeline, fieldBreakdowns } = cached.charts || { timeline: null, fieldBreakdowns: [] };
+                    const sentiment = cached.insights.sentiment;
+                    const topics = cached.insights.topics || [];
+                    const hasSentimentData =
+                      sentiment && (sentiment.positive > 0 || sentiment.negative > 0);
 
-                      <div className="grid lg:grid-cols-2 gap-6">
-                        <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
-                          <div className="flex items-center gap-2 mb-6">
-                            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                              <TrendingUp size={14} />
+                    return (
+                      <div className="space-y-6">
+                        <div className="bg-gradient-to-br from-violet-50 via-white to-blue-50 border border-violet-100 rounded-[2.5rem] p-8">
+                          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white text-violet-600 text-[10px] font-black uppercase tracking-[0.2em] mb-4 border border-violet-100">
+                            <Sparkles size={11} /> Summary
+                          </span>
+                          <p className="text-sm font-medium text-gray-700 leading-relaxed">
+                            {cached.insights.summary}
+                          </p>
+                        </div>
+
+                        {timeline && timeline.labels.length > 1 && (
+                          <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
+                            <div className="flex items-center gap-2 mb-6">
+                              <div className="w-8 h-8 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center">
+                                <TrendingUp size={14} />
+                              </div>
+                              <h4 className="text-xs font-black uppercase tracking-widest text-gray-800">
+                                Responses over time
+                              </h4>
                             </div>
-                            <h4 className="text-xs font-black uppercase tracking-widest text-gray-800">
-                              Patterns found
-                            </h4>
+                            <div className="h-64">
+                              <Line data={buildTimelineChartData(timeline)} options={timelineOptions} />
+                            </div>
                           </div>
-                          <div className="space-y-4">
-                            {insightsCache[selectedFormId].insights.insights &&
-                              insightsCache[selectedFormId].insights.insights.map((item, i) => (
-                                <div key={i} className="pb-4 border-b border-gray-50 last:border-0 last:pb-0">
-                                  <p className="text-xs font-black text-gray-900 mb-1">{item.title}</p>
-                                  <p className="text-[11px] text-gray-500 font-medium leading-relaxed">
-                                    {item.detail}
-                                  </p>
-                                </div>
-                              ))}
+                        )}
+
+                        <div className="grid lg:grid-cols-2 gap-6">
+                          <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
+                            <div className="flex items-center gap-2 mb-6">
+                              <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                                <TrendingUp size={14} />
+                              </div>
+                              <h4 className="text-xs font-black uppercase tracking-widest text-gray-800">
+                                Patterns found
+                              </h4>
+                            </div>
+                            <div className="space-y-4">
+                              {cached.insights.insights &&
+                                cached.insights.insights.map((item, i) => (
+                                  <div key={i} className="pb-4 border-b border-gray-50 last:border-0 last:pb-0">
+                                    <p className="text-xs font-black text-gray-900 mb-1">{item.title}</p>
+                                    <p className="text-[11px] text-gray-500 font-medium leading-relaxed">
+                                      {item.detail}
+                                    </p>
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+
+                          <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
+                            <div className="flex items-center gap-2 mb-6">
+                              <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                                <Lightbulb size={14} />
+                              </div>
+                              <h4 className="text-xs font-black uppercase tracking-widest text-gray-800">
+                                Suggestions
+                              </h4>
+                            </div>
+                            <div className="space-y-4">
+                              {cached.insights.suggestions &&
+                                cached.insights.suggestions.map((item, i) => (
+                                  <div key={i} className="pb-4 border-b border-gray-50 last:border-0 last:pb-0">
+                                    <p className="text-xs font-black text-gray-900 mb-1">{item.title}</p>
+                                    <p className="text-[11px] text-gray-500 font-medium leading-relaxed">
+                                      {item.detail}
+                                    </p>
+                                  </div>
+                                ))}
+                            </div>
                           </div>
                         </div>
 
-                        <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
-                          <div className="flex items-center gap-2 mb-6">
-                            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                              <Lightbulb size={14} />
-                            </div>
-                            <h4 className="text-xs font-black uppercase tracking-widest text-gray-800">
-                              Suggestions
-                            </h4>
-                          </div>
-                          <div className="space-y-4">
-                            {insightsCache[selectedFormId].insights.suggestions &&
-                              insightsCache[selectedFormId].insights.suggestions.map((item, i) => (
-                                <div key={i} className="pb-4 border-b border-gray-50 last:border-0 last:pb-0">
-                                  <p className="text-xs font-black text-gray-900 mb-1">{item.title}</p>
-                                  <p className="text-[11px] text-gray-500 font-medium leading-relaxed">
-                                    {item.detail}
-                                  </p>
+                        {(hasSentimentData || topics.length > 0) && (
+                          <div className="grid lg:grid-cols-2 gap-6">
+                            {hasSentimentData && (
+                              <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
+                                <div className="flex items-center gap-2 mb-6">
+                                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                                    <Smile size={14} />
+                                  </div>
+                                  <h4 className="text-xs font-black uppercase tracking-widest text-gray-800">
+                                    Response sentiment
+                                  </h4>
                                 </div>
-                              ))}
+                                <div className="h-56">
+                                  <Doughnut data={buildSentimentData(sentiment)} options={sentimentOptions} />
+                                </div>
+                              </div>
+                            )}
+
+                            {topics.length > 0 && (
+                              <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
+                                <div className="flex items-center gap-2 mb-6">
+                                  <div className="w-8 h-8 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center">
+                                    <Hash size={14} />
+                                  </div>
+                                  <h4 className="text-xs font-black uppercase tracking-widest text-gray-800">
+                                    Recurring topics
+                                  </h4>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {topics.map((t, i) => (
+                                    <span
+                                      key={i}
+                                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gray-50 border border-gray-100 rounded-full text-[11px] font-bold text-gray-700"
+                                    >
+                                      {t.topic}
+                                      <span className="text-gray-400 font-black">{t.count}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        </div>
+                        )}
+
+                        {fieldBreakdowns.length > 0 && (
+                          <div className="grid lg:grid-cols-2 gap-6">
+                            {fieldBreakdowns.map((field, i) => (
+                              <div key={i} className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
+                                <h4 className="text-xs font-black uppercase tracking-widest text-gray-800 mb-6">
+                                  {field.label}
+                                </h4>
+                                <div style={{ height: Math.max(120, field.labels.length * 44) }}>
+                                  <Bar data={buildFieldBarData(field)} options={fieldBarOptions} />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </>
               )}
             </motion.div>
