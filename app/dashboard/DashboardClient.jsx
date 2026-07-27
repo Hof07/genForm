@@ -20,6 +20,9 @@ import {
   Copy,
   Check,
   ExternalLink,
+  Lightbulb,
+  TrendingUp,
+  RefreshCw,
 } from "lucide-react";
 
 const AURA_GRADIENT =
@@ -63,6 +66,12 @@ export default function DashboardClient({ user }) {
   const [loadingStep, setLoadingStep] = useState(0);
   const [copied, setCopied] = useState(false);
 
+  // AI Insights: per-form selection + cache
+  const [selectedFormId, setSelectedFormId] = useState(null);
+  const [insightsCache, setInsightsCache] = useState({}); // { [formId]: responseData }
+  const [loadingInsights, setLoadingInsights] = useState(false);
+  const [insightsError, setInsightsError] = useState("");
+
   useEffect(() => {
     async function fetchUserForms() {
       try {
@@ -88,6 +97,40 @@ export default function DashboardClient({ user }) {
     }, 1100);
     return () => clearInterval(interval);
   }, [generating]);
+
+  async function fetchInsights(formId) {
+    setLoadingInsights(true);
+    setInsightsError("");
+    try {
+      const res = await fetch(`/api/insights?formId=${formId}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setInsightsError(data.error || "Failed to load insights");
+        return;
+      }
+
+      setInsightsCache((prev) => ({ ...prev, [formId]: data }));
+    } catch (err) {
+      console.error("Failed to fetch insights", err);
+      setInsightsError("Network error - could not reach the server");
+    } finally {
+      setLoadingInsights(false);
+    }
+  }
+
+  function handleSelectForm(formId) {
+    setSelectedFormId(formId);
+    setInsightsError("");
+    if (!insightsCache[formId]) {
+      fetchInsights(formId);
+    }
+  }
+
+  function handleBackToFormList() {
+    setSelectedFormId(null);
+    setInsightsError("");
+  }
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -179,7 +222,8 @@ export default function DashboardClient({ user }) {
       <div
         className="absolute inset-0 z-0 opacity-[0.02] pointer-events-none"
         style={{
-          backgroundImage: "linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)",
+          backgroundImage:
+            "linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)",
           backgroundSize: "40px 40px",
         }}
       />
@@ -268,7 +312,9 @@ export default function DashboardClient({ user }) {
               <div
                 className={
                   "relative rounded-[2rem] border transition-all duration-300 overflow-hidden " +
-                  (isPromptFocused ? "border-violet-300 shadow-xl shadow-violet-500/10" : "border-gray-100 shadow-sm")
+                  (isPromptFocused
+                    ? "border-violet-300 shadow-xl shadow-violet-500/10"
+                    : "border-gray-100 shadow-sm")
                 }
               >
                 <div
@@ -392,9 +438,7 @@ export default function DashboardClient({ user }) {
                         <p className="text-xs font-black uppercase tracking-widest text-emerald-700">
                           Form generated, ready to share
                         </p>
-                        <p className="text-[11px] text-emerald-700/70 font-medium mt-1">
-                          {result.prompt}
-                        </p>
+                        <p className="text-[11px] text-emerald-700/70 font-medium mt-1">{result.prompt}</p>
                       </div>
                     </div>
 
@@ -612,11 +656,185 @@ export default function DashboardClient({ user }) {
               transition={{ duration: 0.2 }}
               className="p-8 max-w-7xl mx-auto w-full"
             >
-              <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm min-h-[300px] flex items-center justify-center">
-                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">
-                  AI Insights will appear once your forms start collecting responses.
-                </p>
-              </div>
+              {!selectedFormId ? (
+                <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
+                  <h3 className="text-lg font-black tracking-tight uppercase italic mb-2">AI Insights</h3>
+                  <p className="text-[11px] text-gray-500 font-medium mb-6">
+                    Select a form to analyze its responses.
+                  </p>
+
+                  {loadingForms ? (
+                    <div className="py-12 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">
+                      Loading forms
+                    </div>
+                  ) : forms.length === 0 ? (
+                    <div className="py-12 text-center bg-gray-50 rounded-2xl border border-gray-100">
+                      <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
+                        No forms yet
+                      </p>
+                      <p className="text-[11px] text-gray-500 font-medium">
+                        Create a form on the Dashboard first.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {forms.map((form) => (
+                        <div
+                          key={form.id}
+                          onClick={() => handleSelectForm(form.id)}
+                          className="flex items-center justify-between p-4 bg-gray-50/80 border border-gray-100 rounded-2xl hover:border-violet-200 transition group cursor-pointer"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 bg-violet-50 text-violet-600 rounded-xl flex items-center justify-center font-black text-xs">
+                              AI
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-black text-gray-900 uppercase tracking-tight group-hover:text-violet-600 transition">
+                                {form.title}
+                              </h4>
+                              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                                {form.description || "No description"}
+                              </p>
+                            </div>
+                          </div>
+                          <ChevronRight size={16} className="text-gray-300 group-hover:translate-x-1 transition-transform" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <button
+                        onClick={handleBackToFormList}
+                        className="text-[10px] font-bold text-gray-400 hover:text-black uppercase tracking-widest transition cursor-pointer mb-2"
+                      >
+                        ← All forms
+                      </button>
+                      <h3 className="text-lg font-black tracking-tight uppercase italic">
+                        {insightsCache[selectedFormId]?.formTitle || "AI Insights"}
+                      </h3>
+                      {insightsCache[selectedFormId]?.hasData && (
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                          Based on {insightsCache[selectedFormId].responseCount} responses
+                        </p>
+                      )}
+                    </div>
+                    {insightsCache[selectedFormId]?.hasData && (
+                      <button
+                        onClick={() => fetchInsights(selectedFormId)}
+                        disabled={loadingInsights}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-gray-50 border border-gray-200 rounded-full text-[10px] font-black uppercase tracking-widest text-gray-600 hover:border-violet-300 transition cursor-pointer disabled:opacity-50"
+                      >
+                        <RefreshCw size={12} className={loadingInsights ? "animate-spin" : ""} />
+                        Refresh
+                      </button>
+                    )}
+                  </div>
+
+                  {loadingInsights && (
+                    <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm min-h-[300px] flex flex-col items-center justify-center gap-4">
+                      <div className="relative w-10 h-10">
+                        <motion.div
+                          animate={{ scale: [1, 1.15, 1], opacity: [0.6, 1, 0.6] }}
+                          transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+                          className="absolute inset-0 rounded-full bg-gradient-to-tr from-violet-500 to-blue-500"
+                        />
+                        <div className="absolute inset-[3px] rounded-full bg-white flex items-center justify-center">
+                          <Sparkles size={14} className="text-violet-600" />
+                        </div>
+                      </div>
+                      <p className="text-xs font-black uppercase tracking-widest text-gray-500">
+                        Analyzing your response data
+                      </p>
+                    </div>
+                  )}
+
+                  {!loadingInsights && insightsError && (
+                    <div className="bg-red-50/50 border border-red-100 rounded-[2.5rem] p-8 flex items-start gap-3">
+                      <AlertCircle size={18} className="text-red-500 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-widest text-red-600">
+                          Could not load insights
+                        </p>
+                        <p className="text-[11px] text-red-600/70 font-medium mt-1">{insightsError}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {!loadingInsights &&
+                    !insightsError &&
+                    insightsCache[selectedFormId] &&
+                    !insightsCache[selectedFormId].hasData && (
+                      <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm min-h-[300px] flex items-center justify-center">
+                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest text-center">
+                          AI Insights will appear once this form starts collecting responses.
+                        </p>
+                      </div>
+                    )}
+
+                  {!loadingInsights && !insightsError && insightsCache[selectedFormId]?.hasData && (
+                    <div className="space-y-6">
+                      <div className="bg-gradient-to-br from-violet-50 via-white to-blue-50 border border-violet-100 rounded-[2.5rem] p-8">
+                        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white text-violet-600 text-[10px] font-black uppercase tracking-[0.2em] mb-4 border border-violet-100">
+                          <Sparkles size={11} /> Summary
+                        </span>
+                        <p className="text-sm font-medium text-gray-700 leading-relaxed">
+                          {insightsCache[selectedFormId].insights.summary}
+                        </p>
+                      </div>
+
+                      <div className="grid lg:grid-cols-2 gap-6">
+                        <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
+                          <div className="flex items-center gap-2 mb-6">
+                            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                              <TrendingUp size={14} />
+                            </div>
+                            <h4 className="text-xs font-black uppercase tracking-widest text-gray-800">
+                              Patterns found
+                            </h4>
+                          </div>
+                          <div className="space-y-4">
+                            {insightsCache[selectedFormId].insights.insights &&
+                              insightsCache[selectedFormId].insights.insights.map((item, i) => (
+                                <div key={i} className="pb-4 border-b border-gray-50 last:border-0 last:pb-0">
+                                  <p className="text-xs font-black text-gray-900 mb-1">{item.title}</p>
+                                  <p className="text-[11px] text-gray-500 font-medium leading-relaxed">
+                                    {item.detail}
+                                  </p>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+
+                        <div className="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
+                          <div className="flex items-center gap-2 mb-6">
+                            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                              <Lightbulb size={14} />
+                            </div>
+                            <h4 className="text-xs font-black uppercase tracking-widest text-gray-800">
+                              Suggestions
+                            </h4>
+                          </div>
+                          <div className="space-y-4">
+                            {insightsCache[selectedFormId].insights.suggestions &&
+                              insightsCache[selectedFormId].insights.suggestions.map((item, i) => (
+                                <div key={i} className="pb-4 border-b border-gray-50 last:border-0 last:pb-0">
+                                  <p className="text-xs font-black text-gray-900 mb-1">{item.title}</p>
+                                  <p className="text-[11px] text-gray-500 font-medium leading-relaxed">
+                                    {item.detail}
+                                  </p>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </motion.div>
           )}
 
