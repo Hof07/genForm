@@ -5,16 +5,11 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-const CHARTABLE_TYPES = ["select", "radio", "checkbox", "rating", "dropdown", "multiplechoice"];
-
-function getFieldKey(field, sampleData) {
-  // Response data may be keyed by field.id or field.label depending on how the
-  // form schema was generated - detect whichever key actually exists.
-  if (field.id && sampleData && Object.prototype.hasOwnProperty.call(sampleData, field.id)) {
-    return field.id;
-  }
-  return field.label;
-}
+// Max distinct values for a field to be considered "chartable" (categorical).
+// Fields with more distinct values than this look like free text / unique IDs.
+const MAX_DISTINCT_VALUES = 8;
+// Free-text values longer than this (avg chars) are excluded from charts.
+const MAX_AVG_VALUE_LENGTH = 40;
 
 function buildTimeline(submissions) {
   const counts = {};
@@ -32,39 +27,78 @@ function buildTimeline(submissions) {
   };
 }
 
+// Builds a key -> display label map from the schema, trying a few common
+// shapes (id, name, key, label) since we don't know the exact schema format.
+function buildLabelMap(schema) {
+  const map = {};
+  (schema || []).forEach((f) => {
+    const label = f.label || f.name || f.title || null;
+    if (!label) return;
+    [f.id, f.name, f.key, f.label].forEach((k) => {
+      if (k) map[k] = label;
+    });
+  });
+  return map;
+}
+
+// Auto-detects which fields in the raw submission data are chartable
+// (small, repeated set of values) vs free text (long / mostly unique),
+// without depending on the form schema's "type" naming.
 function buildFieldBreakdowns(schema, submissions) {
-  if (!schema || submissions.length === 0) return [];
+  if (submissions.length === 0) return [];
 
-  const sample = submissions[0].data || {};
+  const labelMap = buildLabelMap(schema);
 
-  return schema
-    .filter((f) => f.type && CHARTABLE_TYPES.includes(f.type.toLowerCase()))
-    .map((field) => {
-      const key = getFieldKey(field, sample);
-      const tally = {};
+  // Collect every key seen across all submissions' data objects.
+  const allKeys = new Set();
+  submissions.forEach((s) => {
+    if (s.data && typeof s.data === "object") {
+      Object.keys(s.data).forEach((k) => allKeys.add(k));
+    }
+  });
 
-      submissions.forEach((s) => {
-        const raw = s.data ? s.data[key] : undefined;
-        if (raw === undefined || raw === null || raw === "") return;
+  const breakdowns = [];
 
-        const values = Array.isArray(raw) ? raw : [raw];
-        values.forEach((v) => {
-          const label = String(v);
-          tally[label] = (tally[label] || 0) + 1;
-        });
+  allKeys.forEach((key) => {
+    const tally = {};
+    let valueCount = 0;
+    let totalLength = 0;
+
+    submissions.forEach((s) => {
+      const raw = s.data ? s.data[key] : undefined;
+      if (raw === undefined || raw === null || raw === "") return;
+
+      const values = Array.isArray(raw) ? raw : [raw];
+      values.forEach((v) => {
+        const strVal = String(v).trim();
+        if (!strVal) return;
+        valueCount += 1;
+        totalLength += strVal.length;
+        tally[strVal] = (tally[strVal] || 0) + 1;
       });
+    });
 
-      const labels = Object.keys(tally);
-      if (labels.length === 0) return null;
+    if (valueCount === 0) return;
 
-      return {
-        label: field.label,
-        type: field.type,
-        labels,
-        data: labels.map((l) => tally[l]),
-      };
-    })
-    .filter(Boolean);
+    const distinctValues = Object.keys(tally);
+    const avgLength = totalLength / valueCount;
+
+    // Skip fields that look like free text or unique identifiers (emails,
+    // names, comments): too many distinct values, or values are too long.
+    if (distinctValues.length > MAX_DISTINCT_VALUES) return;
+    if (avgLength > MAX_AVG_VALUE_LENGTH) return;
+    // Skip fields where every value is unique with more than a couple of
+    // responses - that's more likely an ID than a category.
+    if (distinctValues.length === valueCount && valueCount > 3) return;
+
+    breakdowns.push({
+      label: labelMap[key] || key.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+      labels: distinctValues,
+      data: distinctValues.map((l) => tally[l]),
+    });
+  });
+
+  return breakdowns;
 }
 
 export async function GET(request) {
